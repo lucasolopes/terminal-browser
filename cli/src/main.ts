@@ -55,6 +55,11 @@ function print(value: unknown) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function reportOpened(browser: string, tab?: number | string | null) {
+  const where = tab === undefined || tab === null ? browser : `tab ${tab} in ${browser}`;
+  process.stdout.write(`opened ${where} (terminal-browser ls for details)\n`);
+}
+
 function takeFlag(args: string[], name: string): string | undefined {
   const at = args.indexOf(name);
   if (at < 0) return undefined;
@@ -451,7 +456,8 @@ async function newTabCommand(url: string | undefined, key: string | undefined): 
   const target = here[0];
   if (target) {
     const where = url ? { cmd: "open-tab", url, cwd: process.cwd() } : { cmd: "open-tab" };
-    print(await control(target.socket, where));
+    const opened = (await control(target.socket, where)) as { openedTab?: number };
+    reportOpened(recordKey(target), opened.openedTab);
     return 0;
   }
   if (!key && !mergeDisabled() && (await tryAdopt(url ? [url] : [], null))) return 0;
@@ -463,7 +469,7 @@ async function newTabCommand(url: string | undefined, key: string | undefined): 
   split.push("--split-dir=right");
   const tty = ownTtyPath() ?? callerTty().path;
   if (tty) split.push(`--parent-tty=${tty}`);
-  print(await launchInSplit(check.terminal!, "right", split, null));
+  reportOpened(recordKey(await launchInSplit(check.terminal!, "right", split, null)));
   return 0;
 }
 
@@ -554,7 +560,7 @@ async function tryAdopt(args: string[], direction: Direction | null): Promise<bo
   for (const host of hosts) {
     try {
       const opened = await openInHost(host.socket, { url: resolved });
-      print({ adopted: instanceKey(host), socket: host.socket, tab: opened.tab });
+      reportOpened(instanceKey(host), opened.tab);
       return true;
     } catch {}
   }
@@ -600,7 +606,7 @@ async function openCommand(args: string[]) {
   const argv = args.map((arg) => (arg === url && fs.existsSync(arg) ? path.resolve(arg) : arg));
   argv.push(`--split-dir=${direction}`);
   if (tty) argv.push(`--parent-tty=${tty}`);
-  print(await launchInSplit(terminal!, direction, argv, size));
+  reportOpened(recordKey(await launchInSplit(terminal!, direction, argv, size)));
 }
 
 function splitPassthrough(args: string[]): { own: string[]; passthrough: string[] } {
