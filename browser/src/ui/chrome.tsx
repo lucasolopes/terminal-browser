@@ -164,18 +164,18 @@ export function Chrome({
         <Box
           style={{
             position: "absolute",
-            inset: { top: layout.page.y - 1, left: layout.page.x - 1 },
-            width: Math.round(Math.min(1, progress) * (layout.page.width + 2)),
+            inset: { top: layout.page.y - layout.frame, left: layout.page.x - layout.frame },
+            width: Math.round(Math.min(1, progress) * (layout.page.width + layout.frame * 2)),
             height: Math.max(2, Math.round(layout.rem * 0.12)),
             overflow: "hidden",
           }}
         >
           <Box
             style={{
-              width: layout.page.width + 2,
+              width: layout.page.width + layout.frame * 2,
               height: Math.round(layout.rem * 2),
               flexShrink: 0,
-              cornerRadius: layout.rem * 0.55,
+              cornerRadius: Math.max(2, layout.rem * 0.55 - 1) + layout.frame,
               border: {
                 width: Math.max(2, Math.round(layout.rem * 0.12)),
                 color: theme.accent,
