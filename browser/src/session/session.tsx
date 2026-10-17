@@ -864,6 +864,12 @@ class Session {
         if (tab && !this.activeRecord()?.reviewing) this.closeOrShutdown(tab.id);
         return;
       }
+      case "tab.next":
+        this.activateAdjacentTab(1);
+        return;
+      case "tab.previous":
+        this.activateAdjacentTab(-1);
+        return;
       case "url.edit":
         this.openUrlEdit();
         return;
@@ -1457,6 +1463,8 @@ class Session {
     });
     return [
       command("find"),
+      command("tab.next"),
+      command("tab.previous"),
       command("record.toggle"),
       command("grab.toggle"),
       command("devtools.toggle"),
@@ -1508,6 +1516,14 @@ class Session {
         : []),
       command("settings.open"),
     ];
+  }
+
+  private activateAdjacentTab(step: 1 | -1) {
+    const tabs = this.tabs.all();
+    const active = this.tabs.active;
+    if (!active || tabs.length < 2) return;
+    const at = tabs.findIndex((tab) => tab.id === active.id);
+    this.tabs.activate(tabs[(at + step + tabs.length) % tabs.length]!.id);
   }
 
   private requestDevReload(socketPath: string) {
