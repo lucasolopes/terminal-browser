@@ -621,6 +621,7 @@ function DevtoolsPane({
           height: divider.height,
           background: dividerEngaged ? [...DIVIDER_ACTIVE] : undefined,
           cornerRadius: 2,
+          pointerShape: horizontal ? "ns-resize" : "ew-resize",
         }}
         onDrag={actions.devtoolsDividerDrag}
         onMouseEnter={() => actions.devtoolsDividerHover(true)}

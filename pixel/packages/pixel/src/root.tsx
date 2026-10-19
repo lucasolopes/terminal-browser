@@ -141,10 +141,6 @@ export function createRoot(options: RootOptions = {}): Root {
     }
     flushSessions();
     try {
-      // wait whats going on here 
-      engineRoot.setPointerShape("text");
-    } catch {}
-    try {
       engineRoot.stop();
     } catch {}
     record?.withdraw();

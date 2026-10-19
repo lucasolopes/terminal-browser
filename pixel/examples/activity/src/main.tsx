@@ -310,7 +310,7 @@ function App() {
       case "k":
         askToEnd();
         return true;
-      case "space":
+      case " ":
         setPaused((value) => !value);
         return true;
       case "q":

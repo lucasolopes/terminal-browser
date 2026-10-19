@@ -82,6 +82,81 @@ fn hit_click_prefers_the_topmost_clickable_and_falls_back_to_ancestors() {
 }
 
 #[test]
+fn pointer_shape_resolves_explicit_shapes_then_inputs_then_selectable_text() {
+    let sized = |x: f32, w: f32| Style {
+        position: Position::Absolute,
+        inset: crate::style::Inset {
+            left: Some(crate::style::InsetValue::Px(x)),
+            top: Some(crate::style::InsetValue::Px(0.0)),
+            ..Default::default()
+        },
+        width: Dimension::Px(w),
+        height: Dimension::Px(40.0),
+        ..Style::default()
+    };
+    let label = |selectable: bool| Desc {
+        text: Some("label".into()),
+        style: Style {
+            selectable: Some(selectable),
+            ..Style::default()
+        },
+        ..Desc::default()
+    };
+    let tree = tree_of(
+        (500.0, 100.0),
+        vec![
+            Desc {
+                style: Style {
+                    pointer_shape: Some("pointer".into()),
+                    ..sized(0.0, 100.0)
+                },
+                clickable: true,
+                children: vec![label(true)],
+                ..Desc::default()
+            },
+            Desc {
+                style: sized(100.0, 100.0),
+                children: vec![label(true)],
+                ..Desc::default()
+            },
+            Desc {
+                style: sized(200.0, 100.0),
+                clickable: true,
+                children: vec![label(true)],
+                ..Desc::default()
+            },
+            Desc {
+                style: sized(300.0, 100.0),
+                children: vec![label(false)],
+                ..Desc::default()
+            },
+            Desc {
+                style: Style {
+                    pointer_shape: Some("pointer".into()),
+                    ..sized(400.0, 100.0)
+                },
+                children: vec![Desc {
+                    style: Style {
+                        width: Dimension::Px(100.0),
+                        height: Dimension::Px(40.0),
+                        ..Style::default()
+                    },
+                    input: Some(InputProps::default()),
+                    ..Desc::default()
+                }],
+                ..Desc::default()
+            },
+        ],
+    );
+    assert_eq!(tree.pointer_shape_at(5.0, 5.0), "pointer");
+    assert_eq!(tree.pointer_shape_at(105.0, 5.0), "text");
+    assert_eq!(tree.pointer_shape_at(205.0, 5.0), "default");
+    assert_eq!(tree.pointer_shape_at(305.0, 5.0), "default");
+    assert_eq!(tree.pointer_shape_at(405.0, 5.0), "text");
+    assert_eq!(tree.pointer_shape_at(150.0, 80.0), "default");
+}
+
+#[test]
 fn pointer_hit_prefers_the_topmost_pointer_surface() {
     let mut tree = Tree::new((200.0, 100.0));
     let bottom = tree.create(Props {

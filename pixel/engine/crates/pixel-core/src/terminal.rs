@@ -279,6 +279,7 @@ pub struct Terminal {
     saved: Option<Termios>,
     hosted: Option<crate::hosted::HostState>,
     last_frame_size: Option<(u32, u32)>,
+    pointer_shape_written: bool,
     mouse_pixels: bool,
     focused: bool,
     cell: Option<(u32, u32)>,
@@ -548,6 +549,7 @@ impl Terminal {
             saved,
             hosted: None,
             last_frame_size: None,
+            pointer_shape_written: false,
             mouse_pixels: false,
             focused: true,
             cell: None,
@@ -1391,9 +1393,17 @@ impl Terminal {
         } else {
             shape
         };
+        self.pointer_shape_written = true;
         self.io.out()
             .write_all(format!("\x1b]22;{shape}\x1b\\").as_bytes())?;
         self.io.out().flush()
+    }
+
+    // An I-beam is what terminals show over their own text once we are gone.
+    fn restore_pointer_shape(&mut self) {
+        if self.pointer_shape_written {
+            let _ = self.io.out().write_all(b"\x1b]22;text\x1b\\");
+        }
     }
 
     pub fn set_title(&mut self, text: &str) -> io::Result<()> {
@@ -1699,7 +1709,7 @@ impl Drop for Terminal {
                 self.payloads.remove_all();
                 return;
             }
-            // The host keeps its terminal; only our image goes.
+            self.restore_pointer_shape();
             let _ = self.io.out().write_all(&crate::kitty::kitty_delete_one(self.image_id));
             let _ = self.io.out().flush();
             return;
@@ -1713,6 +1723,7 @@ impl Drop for Terminal {
         if self.color_scheme_updates {
             let _ = self.io.out().write_all(b"\x1b[?2031l");
         }
+        self.restore_pointer_shape();
         let _ = self.io.out().write_all(
             b"\x1b[<u\x1b[?2048l\x1b[?2004l\x1b[?1004l\x1b[?1016l\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[?1049l",
         );

@@ -371,7 +371,6 @@ class Session {
     this.applyRenderSettings();
     this.settings.watch();
     this.recalculateLayout();
-    this.root.setPointerShape("default");
     this.tabs.create(this.fallbackState.url);
     this.registry = new Registry({
       key: this.ctx.key,
@@ -596,9 +595,6 @@ class Session {
     newTabCancel: () => this.closeNewTabModal(),
     devtoolsDividerHover: (hovering) => {
       this.dividerHover = hovering;
-      this.root?.setPointerShape(
-        hovering ? (this.devtoolsDockSide === "bottom" ? "ns-resize" : "ew-resize") : "default",
-      );
       this.render();
     },
     devtoolsDividerDrag: (event) => {

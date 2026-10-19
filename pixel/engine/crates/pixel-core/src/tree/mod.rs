@@ -1369,6 +1369,30 @@ impl Tree {
         })
     }
 
+    pub fn pointer_shape_at(&self, x: f32, y: f32) -> &str {
+        let mut current = self.hit_any(x, y);
+        let mut over_text = false;
+        while let Some(id) = current {
+            let Some(node) = self.get(id) else {
+                break;
+            };
+            if let Some(shape) = &node.style.pointer_shape {
+                return shape;
+            }
+            if node.input.is_some() {
+                return "text";
+            }
+            if self.selectable_text_leaf(id) {
+                over_text = true;
+            }
+            if node.clickable {
+                over_text = false;
+            }
+            current = node.parent;
+        }
+        if over_text { "text" } else { "default" }
+    }
+
     pub fn hit_click(&self, x: f32, y: f32) -> Option<NodeId> {
         self.paint_order.iter().rev().copied().find(|&id| {
             self.get(id)
