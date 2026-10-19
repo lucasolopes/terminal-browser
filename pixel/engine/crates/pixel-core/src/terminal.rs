@@ -1399,7 +1399,6 @@ impl Terminal {
         self.io.out().flush()
     }
 
-    // An I-beam is what terminals show over their own text once we are gone.
     fn restore_pointer_shape(&mut self) {
         if self.pointer_shape_written {
             let _ = self.io.out().write_all(b"\x1b]22;text\x1b\\");

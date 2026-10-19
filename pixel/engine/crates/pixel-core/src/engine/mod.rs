@@ -900,6 +900,7 @@ impl Engine {
 
     pub fn retarget(&mut self, target: Retarget) -> io::Result<()> {
         self.term.retarget(target, self.session_env.clone())?;
+        self.pointer_shape = None;
         self.native = if self.term.is_hosted() && !self.term.is_embedded() {
             None
         } else {

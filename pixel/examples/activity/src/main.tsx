@@ -253,6 +253,11 @@ function App() {
     setFilter("");
   };
 
+  const selectAnywhere = (pid: number) => {
+    if (!visible.some((process) => process.pid === pid)) clearFilter();
+    setSelectedPid(pid);
+  };
+
   const askToEnd = () => {
     if (!live) return;
     filterInput.current?.blur();
@@ -397,7 +402,7 @@ function App() {
             exited={exited}
             parent={selected ? byPid.get(selected.ppid) ?? null : null}
             childCount={selected ? childCounts.get(selected.pid) ?? 0 : 0}
-            onSelect={setSelectedPid}
+            onSelect={selectAnywhere}
             onEnd={askToEnd}
           />
         </Box>

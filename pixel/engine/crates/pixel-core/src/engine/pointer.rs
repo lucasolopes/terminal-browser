@@ -396,8 +396,9 @@ impl Engine {
             return;
         }
         let shape = shape.to_string();
-        let _ = self.term.set_pointer_shape(&shape);
-        self.pointer_shape = Some(shape);
+        if self.term.set_pointer_shape(&shape).is_ok() {
+            self.pointer_shape = Some(shape);
+        }
     }
 
     pub(super) fn update_hover_target(

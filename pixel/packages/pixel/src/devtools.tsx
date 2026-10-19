@@ -148,6 +148,10 @@ export function DevTools({ target, style, dock = "right", panel, onAction, keepF
       opened.current.externalDevtools = false;
       opened.current.host?.closeDevtools();
     }
+    if (opened.current !== entry) {
+      if (opened.current) opened.current.externalDevtoolsCursor = null;
+      setPointerShape(host.devtools?.cursorShape ?? "default");
+    }
     opened.current = entry;
     entry.externalDevtoolsAction = (action) => onAction?.(action);
     entry.externalDevtoolsCursor = setPointerShape;
