@@ -16,7 +16,6 @@
     "index.mjs",
     "template/package.json",
     "template/tsconfig.json",
-    "template/README.md",
     "template/gitignore",
     "template/src"
   ],

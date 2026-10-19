@@ -13,9 +13,7 @@ const root = createRoot({
 const PIXEL = "https://github.com/zenbu-labs/terminal-browser/tree/main/pixel";
 
 const LINKS = [
-  // fixme: placeholder copy
   { title: "Docs", url: `${PIXEL}#documentation` },
-  // fixme: placeholder copy
   { title: "Examples", url: `${PIXEL}/examples` },
 ];
 
@@ -85,7 +83,6 @@ function App() {
       <Wordmark cell={Math.round(rem * 0.7)} color={theme.fg} />
 
       <Box style={{ alignItems: "center", gap: rem * 0.5 }}>
-        {/* fixme: placeholder copy */}
         <Text style={{ fontSize: rem * 0.9, color: theme.muted, selectable: false }}>Get started by editing</Text>
         <Box
           style={{
@@ -106,7 +103,6 @@ function App() {
         ))}
       </Box>
 
-      {/* fixme: placeholder copy */}
       <Text style={{ fontSize: rem * 0.75, color: theme.disabled, selectable: false }}>ctrl+c to quit</Text>
     </Box>
   );
