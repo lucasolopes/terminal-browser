@@ -8,7 +8,7 @@ Paths are relative to this directory (`pixel/`). Source: `packages/pixel/src/`. 
 | --- | --- |
 | `packages/pixel/src/index.ts` | everything exported from `@zenbu-labs/pixel` |
 | `packages/pixel/src/root.tsx` | `createRoot`, `RootOptions`, `Root` |
-| `packages/pixel/src/react/index.ts` | engine root, render settings, key events, clipboard and pointer functions |
+| `packages/pixel/src/react/index.ts` | engine root, render settings, key events, clipboard functions |
 | `packages/pixel/src/react/reconciler-config.ts` | props and event types for `Box`, `Text`, `Input`, `Image`, `Path`, `MarkedText` |
 | `packages/pixel/src/react/components.ts` | component definitions, `NodeHandle` |
 | `packages/pixel/src/react/styles.ts` | `Style`, `Color`, borders, gradients |
@@ -125,7 +125,6 @@ function createRoot(options?: RootOptions): Root
 | `setTitle(text)` | sets the terminal title |
 | `setClipboard(text)` | copies via OSC 52 |
 | `requestClipboardImage()` | requests a clipboard image, delivered to `onPasteImage` |
-| `setPointerShape(shape)` | sets the mouse cursor, CSS cursor names |
 | `setClearColor(rgba)` | background color behind all content; alpha 0 shows the terminal |
 | `setKeyCapture(keys: string[])` | listed unmodified keys (`"enter"`, `"escape"`, `"a"`) go to `onKey` even while an `Input` is focused; keys with ctrl/alt/shift/super never match |
 | `registerFont(path): Promise<number>` | loads a font file, returns an id for `style.font` |
@@ -165,8 +164,11 @@ function createRoot(options?: RootOptions): Root
 | `opaque`, `wrap`, `ellipsis`, `selectable` | `boolean` |
 | `scrollbar` | `ScrollbarStyle` |
 | `selectionMode` | `"text" \| "unified"` |
+| `pointerShape` | `PointerShape`, CSS cursor names (`"pointer"`, `"text"`, `"grab"`, `"ns-resize"`, ...) |
 
 `Color` = `[r, g, b, a] \| [r, g, b] \| "#rgb" \| "#rgba" \| "#rrggbb" \| "#rrggbbaa"`. There is no `minHeight`.
+
+The engine sets the mouse cursor from whatever is under it. The nearest `pointerShape` on the node or an ancestor wins. Without one, an `Input` or selectable text shows `"text"` (text inside a clickable does not), and everything else shows `"default"`. Anything drawn on top decides, so an overlay above an `Input` needs `pointerShape: "text"`.
 
 ## Components
 
@@ -292,7 +294,6 @@ pixel.quit(): void                     // same as navigating to pixel://quit
 | `useRect(ref): Rect \| null` | `layout.ts:11` | laid out `{ x, y, width, height }` of a node |
 | `useStore(store)` | `react/devtools/store.ts:30` | subscribes to a `{ get, set, update, subscribe }` store |
 | `setClipboard(text)` | `react/index.ts:150` | copies via OSC 52 |
-| `setPointerShape(shape)` | `react/index.ts:138` | sets the mouse cursor |
 | `requestClipboardImage()` | `react/index.ts:144` | requests a clipboard image |
 | `highlight(source, language): HighlightSpan[]` | `react/native.ts:205` | tree-sitter spans `{ start, end, capture }`; capture indexes `HIGHLIGHT_CAPTURES` |
 | `diff(old, new, contextLines?): DiffRow[]` | `react/native.ts:211` | line diff with word emphasis |
