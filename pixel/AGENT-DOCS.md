@@ -34,6 +34,7 @@ Paths are relative to this directory (`pixel/`). Source: `packages/pixel/src/`. 
 
 | path | shows |
 | --- | --- |
+| `packages/create-pixel/template` | the `npm create @zenbu-labs/pixel` starter; run it from the repo root with `pnpm starter` |
 | `examples/hello` | `createRoot` + `root.loadURL`, one full screen page |
 | `examples/composed` | React layout, two `WebView`s, `DevTools`, `Input`, preload script, guest tabs |
 | `examples/transparent` | transparent root and transparent `WebView` |
@@ -126,7 +127,7 @@ function createRoot(options?: RootOptions): Root
 | `requestClipboardImage()` | requests a clipboard image, delivered to `onPasteImage` |
 | `setPointerShape(shape)` | sets the mouse cursor, CSS cursor names |
 | `setClearColor(rgba)` | background color behind all content; alpha 0 shows the terminal |
-| `setKeyCapture(keys: string[])` | listed keys go to `onKey` even while an `Input` is focused |
+| `setKeyCapture(keys: string[])` | listed unmodified keys (`"enter"`, `"escape"`, `"a"`) go to `onKey` even while an `Input` is focused; keys with ctrl/alt/shift/super never match |
 | `registerFont(path): Promise<number>` | loads a font file, returns an id for `style.font` |
 | `createSurface(): Surface` | creates a pixel surface for `<Box surface>` |
 | `setRender({ maxFps?, highlightTransmits?, frameEvents? })` | frame rate cap and render debug options |
@@ -175,10 +176,11 @@ Props: `packages/pixel/src/react/reconciler-config.ts`. Definitions: `packages/p
 | --- | --- |
 | `Box` | `BoxProps` `:78`. `style`, `id`, `hidden`, `onClick(ClickEvent)`, `onClickOutside`, `onPointer(PointerEvent)`, `onMouseEnter`, `onMouseLeave`, `onMouseMove({ x, y })`, `onDrag(DragEvent)`, `onScroll(ScrollEvent)`, `onWheel(WheelEvent)`, `onSelection(ContainerSelection)`, `contentHeight`, `surface: Surface` |
 | `Text` | `TextProps` `:128`. children must be strings or numbers. `spans: { start, end, color, background?, bold?, italic?, underline?, strikethrough? }[]`, `onClick`, `onMouseEnter`, `onMouseLeave` |
-| `Input` | `InputProps` `:177`. multi-line editor. `value`, `defaultValue`, `autoFocus`, `onChange(text, ChangeInfo)`, `onSubmit(text, marks)`, `onCaret(CaretInfo)`, `onPasteImage`, `caretColor`, `selectionColor`, `spans`, `gutter: { color, activeColor }`, `activeLine`, `defaultMarks`, `renderMark(id)`, `serializeMark(id)` |
+| `Input` | `InputProps` `:177`. multi-line editor; with `style.wrap: false` it is single-line and its text is vertically centered when the box is taller than one line. `value`, `defaultValue`, `autoFocus`, `onChange(text, ChangeInfo)`, `onSubmit(text, marks)`, `onCaret(CaretInfo)`, `onPasteImage`, `caretColor`, `selectionColor`, `spans`, `gutter: { color, activeColor }`, `activeLine`, `defaultMarks`, `renderMark(id)`, `serializeMark(id)` |
 | `Image` | `ImageProps` `:211`. `src` path or url, `placeholder`, `error`, `onClick` |
 | `Path` | `PathProps` `:104`. SVG path data. `d`, `viewBox`, `stroke: { width, color, cap?, join? }`, `onClick`, `onDrag` |
 | `MarkedText` | `MarkedTextProps` `:197`. `text`, `marks`, `renderMark`, `serializeMark` |
+| `Link` | `packages/pixel/src/react/link.tsx`. `href`, `children`, `style`, `onClick(ClickEvent)`. Opens `href` in the default browser on click (`onClick` replaces that), shows the pointer cursor on hover. String children render as `Text` with `style`; use `style.hoverColor` for a hover state |
 | `Markdown` | `packages/pixel/src/react/markdown.tsx:25`. `text`, `theme: MarkdownTheme`, `rem`, `streaming`, `monoFont`, `onLinkClick(href)`, `highlight`, `highlightBg` |
 | `WebView` | see WebView |
 | `DevTools` | `packages/pixel/src/devtools.tsx:100`. `target: RefObject<WebViewHandle> \| WebViewHandle`, `dock: "bottom" \| "right"`, `panel`, `onAction("close" \| "dock-bottom" \| "dock-right")`, `style`, `keepFrame` |

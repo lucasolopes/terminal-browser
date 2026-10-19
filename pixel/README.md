@@ -3,7 +3,7 @@ A library for building graphical applications that can run in the terminal
 
 
 ```
-npm install @zenbu-labs/pixel
+npm create @zenbu-labs/pixel my-app
 ```
 
 ## Notable features:
@@ -20,3 +20,5 @@ npm install @zenbu-labs/pixel
 
 ## Documentation
 Documentation is WIP. You can find examples of many usage patterns inside [`examples`](examples). For advanced usage you can reference the above projects that use pixel in production. 
+
+

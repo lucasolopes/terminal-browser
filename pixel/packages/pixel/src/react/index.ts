@@ -121,6 +121,8 @@ export type {
 } from "./surface";
 export { Markdown } from "./markdown";
 export type { MarkdownProps, MarkdownTheme } from "./markdown";
+export { Link } from "./link";
+export type { LinkProps } from "./link";
 export { openDevtools, closeDevtools, toggleDevtools, requestLayout, engineOp };
 
 /**

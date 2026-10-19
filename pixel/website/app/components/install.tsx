@@ -4,9 +4,9 @@ import { useState } from "react";
 import { CopyIcon } from "./icons";
 
 const MANAGERS = [
-  { name: "npm", command: "npm install @zenbu-labs/pixel" },
-  { name: "pnpm", command: "pnpm add @zenbu-labs/pixel" },
-  { name: "bun", command: "bun add @zenbu-labs/pixel" },
+  { name: "npm", command: "npm create @zenbu-labs/pixel" },
+  { name: "pnpm", command: "pnpm create @zenbu-labs/pixel" },
+  { name: "bun", command: "bun create @zenbu-labs/pixel" },
 ];
 
 export default function Install() {

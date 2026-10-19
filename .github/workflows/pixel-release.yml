@@ -155,7 +155,7 @@ jobs:
       - name: Stamp versions from the tag
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          for pkg in pixel/packages/native/* pixel/packages/pixel; do
+          for pkg in pixel/packages/native/* pixel/packages/pixel pixel/packages/create-pixel; do
             (cd "$pkg" && npm version "$VERSION" --no-git-tag-version --allow-same-version)
           done
           node -e '
@@ -171,6 +171,7 @@ jobs:
             (cd "$pkg" && npm publish --access public --provenance)
           done
           (cd pixel/packages/pixel && npm publish --access public --provenance)
+          (cd pixel/packages/create-pixel && npm publish --access public --provenance)
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
