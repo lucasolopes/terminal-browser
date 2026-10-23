@@ -43,7 +43,9 @@ import { claudeBridgeCommand } from "./claude-bridge";
 import { configCommand } from "./config";
 
 const DIST_ROOT = process.env.TERMINAL_BROWSER_DIST_ROOT ?? null;
-const CAPABILITIES = ["embedding", "image-frames"] as const;
+// Windows Terminal draws sixel images into its text cells, so a host redrawing its own text around
+// an embedded browser wipes it; there the browser opens in a pane of its own beside the host.
+const CAPABILITIES = process.platform === "win32" ? (["split-pane"] as const) : (["embedding", "image-frames"] as const);
 delete process.env.ELECTRON_RUN_AS_NODE;
 
 function fail(message: string): never {
