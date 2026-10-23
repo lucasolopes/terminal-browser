@@ -344,6 +344,26 @@ test("ghostty asks the owning instance for a split's neighbor by window and tab"
 });
 
 
+test("windows terminal sizes splits and keeps semicolons inside the command", async () => {
+  const { run, commands } = recorder({
+    "wt -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y": "",
+  });
+  const terminal = detect({ WT_SESSION: "s1" }, run);
+  await terminal.split({
+    from: { id: "s1", tab: "s1" },
+    direction: "down",
+    command: ["terminal-browser", "open", "https://a.test/x;y"],
+    size: 0.4,
+    tty: null,
+  });
+  assert.deepEqual(commands, ["wt -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y"]);
+});
+
+test("a windows terminal session inherited by another terminal is not windows terminal", () => {
+  assert.equal(detect({ WT_SESSION: "s1", TERM_PROGRAM: "vscode" }, async () => "")?.name, "vscode");
+  assert.equal(detect({ WT_SESSION: "s1", TERM_PROGRAM: "WezTerm", WEZTERM_PANE: "1" }, async () => "")?.name, "wezterm");
+});
+
 test("the graphics probe settles on kitty graphics, sixel, or neither", () => {
   const { graphicsSupport } = require("../dist/terminal/graphics.js");
   assert.equal(graphicsSupport("\x1b_Gi=4207;OK\x1b\\\x1b[?62;4c"), "supported");
