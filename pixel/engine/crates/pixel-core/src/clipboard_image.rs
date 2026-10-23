@@ -85,7 +85,7 @@ pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
         Some(rest) => file_url_path(percent_decode(rest)),
         None => unescape(unquoted),
     };
-    if !Path::new(&path).is_absolute() && !path.starts_with('~') {
+    if !names_a_local_file(&path) && !path.starts_with('~') {
         return None;
     }
     let path = match path.strip_prefix("~/") {
@@ -99,6 +99,21 @@ pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
 }
 
 const HOME_VAR: &str = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+
+// Touching a `\\host\share` path makes Windows sign in to that host, so only drive paths count.
+#[cfg(windows)]
+fn names_a_local_file(path: &str) -> bool {
+    use std::path::{Component, Prefix};
+    matches!(
+        Path::new(path).components().next(),
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
+    ) && Path::new(path).is_absolute()
+}
+
+#[cfg(not(windows))]
+fn names_a_local_file(path: &str) -> bool {
+    Path::new(path).is_absolute()
+}
 
 // `file:///C:/x.png` names `C:/x.png` on Windows.
 fn file_url_path(path: String) -> String {
@@ -188,6 +203,27 @@ mod tests {
         let url_path = raw.replace('\\', "/").replace(' ', "%20");
         let url = if url_path.starts_with('/') { format!("file://{url_path}") } else { format!("file:///{url_path}") };
         assert!(image_path_from_paste(&url).is_some(), "{url}");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn only_local_drive_paths_count_as_pasted_files() {
+        assert!(names_a_local_file(r"C:\Users\me\shot.png"));
+        assert!(names_a_local_file("C:/Users/me/shot.png"));
+        assert!(names_a_local_file(r"\\?\C:\Users\me\shot.png"));
+        assert!(!names_a_local_file(r"\\attacker\share\shot.png"), "opening it would sign in to that host");
+        assert!(!names_a_local_file("//attacker/share/shot.png"));
+        assert!(!names_a_local_file(r"\\?\UNC\attacker\share\shot.png"));
+        assert!(!names_a_local_file(r"\\.\pipe\shot.png"));
+        assert!(!names_a_local_file(r"Users\me\shot.png"));
+        assert!(image_path_from_paste("file://attacker/share/shot.png").is_none());
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn only_absolute_paths_count_as_pasted_files() {
+        assert!(names_a_local_file("/tmp/shot.png"));
+        assert!(!names_a_local_file("tmp/shot.png"));
     }
 
     #[test]
