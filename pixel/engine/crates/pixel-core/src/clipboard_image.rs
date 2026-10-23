@@ -76,6 +76,14 @@ pub(crate) fn read_for_worker() -> Option<WorkerPaste> {
 }
 
 pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
+    let path = pasted_path(text, std::env::var(HOME_VAR).ok().as_deref())?;
+    if !path.is_file() {
+        return None;
+    }
+    from_file(&path, PasteSource::File)
+}
+
+fn pasted_path(text: &str, home: Option<&str>) -> Option<PathBuf> {
     let trimmed = text.trim();
     if trimmed.is_empty() || trimmed.contains('\n') {
         return None;
@@ -85,34 +93,28 @@ pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
         Some(rest) => file_url_path(percent_decode(rest)),
         None => unescape(unquoted),
     };
-    if !names_a_local_file(&path) && !path.starts_with('~') {
-        return None;
-    }
     let path = match path.strip_prefix("~/") {
-        Some(rest) => Path::new(&std::env::var(HOME_VAR).ok()?).join(rest),
+        Some(rest) => Path::new(home?).join(rest),
         None => PathBuf::from(path),
     };
-    if !path.is_file() {
-        return None;
-    }
-    from_file(&path, PasteSource::File)
+    names_a_local_file(&path).then_some(path)
 }
 
 const HOME_VAR: &str = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
 
 // Touching a `\\host\share` path makes Windows sign in to that host, so only drive paths count.
 #[cfg(windows)]
-fn names_a_local_file(path: &str) -> bool {
+fn names_a_local_file(path: &Path) -> bool {
     use std::path::{Component, Prefix};
     matches!(
-        Path::new(path).components().next(),
+        path.components().next(),
         Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
-    ) && Path::new(path).is_absolute()
+    ) && path.is_absolute()
 }
 
 #[cfg(not(windows))]
-fn names_a_local_file(path: &str) -> bool {
-    Path::new(path).is_absolute()
+fn names_a_local_file(path: &Path) -> bool {
+    path.is_absolute()
 }
 
 // `file:///C:/x.png` names `C:/x.png` on Windows.
@@ -208,22 +210,29 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn only_local_drive_paths_count_as_pasted_files() {
-        assert!(names_a_local_file(r"C:\Users\me\shot.png"));
-        assert!(names_a_local_file("C:/Users/me/shot.png"));
-        assert!(names_a_local_file(r"\\?\C:\Users\me\shot.png"));
-        assert!(!names_a_local_file(r"\\attacker\share\shot.png"), "opening it would sign in to that host");
-        assert!(!names_a_local_file("//attacker/share/shot.png"));
-        assert!(!names_a_local_file(r"\\?\UNC\attacker\share\shot.png"));
-        assert!(!names_a_local_file(r"\\.\pipe\shot.png"));
-        assert!(!names_a_local_file(r"Users\me\shot.png"));
-        assert!(image_path_from_paste("file://attacker/share/shot.png").is_none());
+        let local = |text: &str| pasted_path(text, Some(r"C:\Users\me")).is_some();
+        assert!(local(r"C:\Users\me\shot.png"));
+        assert!(local("C:/Users/me/shot.png"));
+        assert!(local(r"\\?\C:\Users\me\shot.png"));
+        assert!(local("~/shot.png"));
+        assert!(!local(r"\\attacker\share\shot.png"), "opening it would sign in to that host");
+        assert!(!local("//attacker/share/shot.png"));
+        assert!(!local(r"\\?\UNC\attacker\share\shot.png"));
+        assert!(!local(r"\\.\pipe\shot.png"));
+        assert!(!local(r"Users\me\shot.png"));
+        assert!(!local("file://attacker/share/shot.png"));
+        assert!(!local(r"~/\\attacker\share\shot.png"), "joining an absolute path drops the home directory");
+        assert!(!local("~shot.png"));
     }
 
     #[test]
     #[cfg(not(windows))]
     fn only_absolute_paths_count_as_pasted_files() {
-        assert!(names_a_local_file("/tmp/shot.png"));
-        assert!(!names_a_local_file("tmp/shot.png"));
+        let local = |text: &str| pasted_path(text, Some("/home/me")).is_some();
+        assert!(local("/tmp/shot.png"));
+        assert!(local("~/shot.png"));
+        assert!(!local("tmp/shot.png"));
+        assert!(!local("~shot.png"));
     }
 
     #[test]
