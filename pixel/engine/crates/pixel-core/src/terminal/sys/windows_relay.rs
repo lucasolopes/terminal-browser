@@ -44,6 +44,61 @@ fn manual_reset_event() -> io::Result<Owned> {
     Ok(Owned(event))
 }
 
+// The default pipe security lets every user read, and pipe names can be listed, so another user
+// could connect first and read the keys typed into this console; the relay's pipe admits only us.
+fn owner_only_sddl() -> io::Result<String> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    let mut token: HANDLE = std::ptr::null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = Owned(token);
+    let mut needed = 0u32;
+    unsafe { GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed) };
+    let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+    if unsafe { GetTokenInformation(token.0, TokenUser, buffer.as_mut_ptr().cast(), needed, &mut needed) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+    let mut text: *mut u16 = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(user.User.Sid, &mut text) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let length = (0..).take_while(|&i| unsafe { *text.add(i) } != 0).count();
+    let sid = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(text, length) });
+    unsafe { LocalFree(text.cast()) };
+    Ok(format!("D:P(A;;GA;;;{sid})"))
+}
+
+struct OwnerOnly(windows_sys::Win32::Security::PSECURITY_DESCRIPTOR);
+
+impl OwnerOnly {
+    fn new() -> io::Result<Self> {
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+        };
+        let sddl: Vec<u16> = owner_only_sddl()?.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut descriptor = std::ptr::null_mut();
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), SDDL_REVISION_1, &mut descriptor, std::ptr::null_mut())
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self(descriptor))
+    }
+}
+
+impl Drop for OwnerOnly {
+    fn drop(&mut self) {
+        unsafe { windows_sys::Win32::Foundation::LocalFree(self.0) };
+    }
+}
+
 /// Carries this process's console to an engine that opened the pipe as its terminal: bytes the
 /// engine writes go to the console, keys and terminal replies go back, and every console resize
 /// is sent as an in-band size report.
@@ -54,6 +109,12 @@ pub struct ConsoleRelay {
 impl ConsoleRelay {
     pub fn create(name: &str) -> io::Result<Self> {
         let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let owner_only = OwnerOnly::new()?;
+        let attributes = windows_sys::Win32::Security::SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<windows_sys::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: owner_only.0,
+            bInheritHandle: 0,
+        };
         let pipe = unsafe {
             CreateNamedPipeW(
                 wide.as_ptr(),
@@ -63,7 +124,7 @@ impl ConsoleRelay {
                 PIPE_BUFFER,
                 PIPE_BUFFER,
                 0,
-                std::ptr::null(),
+                &attributes,
             )
         };
         if pipe == INVALID_HANDLE_VALUE {
@@ -209,6 +270,14 @@ mod tests {
 
     fn rand_suffix() -> u128 {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+    }
+
+    #[test]
+    fn the_pipe_admits_only_the_user_running_the_relay() {
+        let sddl = owner_only_sddl().unwrap();
+        let sid = sddl.strip_prefix("D:P(A;;GA;;;").and_then(|rest| rest.strip_suffix(')')).unwrap();
+        assert!(sid.starts_with("S-1-5-"), "{sddl}");
+        assert!(!sid.contains('('), "one entry, for this user alone: {sddl}");
     }
 
     #[test]
