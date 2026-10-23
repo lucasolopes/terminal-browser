@@ -387,6 +387,9 @@ test("local sockets become named pipes on windows and stay files elsewhere", () 
     assert.match(secret, /^[0-9a-f]{64}$/, "the name rests on a secret only this user can read");
     fs.writeFileSync(path.join(dir, ".pipe-secret"), "f".repeat(64));
     assert.notEqual(ipcPath(file), name, "without the secret the name cannot be worked out from the path");
+    fs.writeFileSync(path.join(dir, ".pipe-secret"), "");
+    assert.throws(() => ipcPath(file), /pipe secret/, "an empty secret would make the name guessable again");
+    assert.deepEqual(fs.readdirSync(dir), [".pipe-secret"], "no half written secret is left behind");
   } else {
     assert.equal(ipcPath(file), file);
   }
