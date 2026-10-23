@@ -376,11 +376,17 @@ test("the graphics probe settles on kitty graphics, sixel, or neither", () => {
 
 test("local sockets become named pipes on windows and stay files elsewhere", () => {
   const { ipcPath } = require("../dist/terminal/index.js");
-  const file = path.join(os.tmpdir(), "terminal-browser", "daemon.sock");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tb-ipc-"));
+  const file = path.join(dir, "daemon.sock");
   if (process.platform === "win32") {
-    assert.match(ipcPath(file), /^\\\\\.\\pipe\\terminal-browser-[0-9a-f]{16}-daemon\.sock$/);
-    assert.equal(ipcPath(file), ipcPath(file), "the same file always names the same pipe");
-    assert.notEqual(ipcPath(file), ipcPath(file.replace("daemon", "other")));
+    const name = ipcPath(file);
+    assert.match(name, /^\\\\\.\\pipe\\terminal-browser-[0-9a-f]{32}-daemon\.sock$/);
+    assert.equal(ipcPath(file), name, "the same file always names the same pipe");
+    assert.notEqual(ipcPath(path.join(dir, "other.sock")), name);
+    const secret = fs.readFileSync(path.join(dir, ".pipe-secret"), "utf8");
+    assert.match(secret, /^[0-9a-f]{64}$/, "the name rests on a secret only this user can read");
+    fs.writeFileSync(path.join(dir, ".pipe-secret"), "f".repeat(64));
+    assert.notEqual(ipcPath(file), name, "without the secret the name cannot be worked out from the path");
   } else {
     assert.equal(ipcPath(file), file);
   }
