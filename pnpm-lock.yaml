@@ -275,6 +275,8 @@ importers:
 
   pixel/packages/native/linux-x64: {}
 
+  pixel/packages/native/win32-x64: {}
+
   pixel/packages/pixel:
     dependencies:
       react-reconciler:

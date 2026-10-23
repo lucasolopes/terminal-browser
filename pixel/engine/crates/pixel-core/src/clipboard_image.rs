@@ -82,14 +82,14 @@ pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
     }
     let unquoted = trimmed.trim_matches(|c| c == '\'' || c == '"');
     let path = match unquoted.strip_prefix("file://") {
-        Some(rest) => percent_decode(rest),
+        Some(rest) => file_url_path(percent_decode(rest)),
         None => unescape(unquoted),
     };
-    if !path.starts_with('/') && !path.starts_with('~') {
+    if !Path::new(&path).is_absolute() && !path.starts_with('~') {
         return None;
     }
     let path = match path.strip_prefix("~/") {
-        Some(rest) => Path::new(&std::env::var("HOME").ok()?).join(rest),
+        Some(rest) => Path::new(&std::env::var(HOME_VAR).ok()?).join(rest),
         None => PathBuf::from(path),
     };
     if !path.is_file() {
@@ -98,6 +98,22 @@ pub fn image_path_from_paste(text: &str) -> Option<PastedImage> {
     from_file(&path, PasteSource::File)
 }
 
+const HOME_VAR: &str = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+
+// `file:///C:/x.png` names `C:/x.png` on Windows.
+fn file_url_path(path: String) -> String {
+    let bytes = path.as_bytes();
+    let drive = cfg!(windows) && bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':';
+    if drive { path[1..].to_string() } else { path }
+}
+
+// Backslash is the path separator on Windows, so pasted paths there are taken verbatim.
+#[cfg(windows)]
+fn unescape(s: &str) -> String {
+    s.to_string()
+}
+
+#[cfg(not(windows))]
 fn unescape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -165,9 +181,13 @@ mod tests {
         let path = temp_png("with space.png");
         let raw = path.to_string_lossy();
         assert!(image_path_from_paste(&format!("'{raw}'")).is_some());
-        assert!(image_path_from_paste(&raw.replace(' ', "\\ ")).is_some());
-        let url = format!("file://{}", raw.replace(' ', "%20"));
-        assert!(image_path_from_paste(&url).is_some());
+        assert!(image_path_from_paste(&format!("\"{raw}\"")).is_some());
+        if cfg!(not(windows)) {
+            assert!(image_path_from_paste(&raw.replace(' ', "\\ ")).is_some());
+        }
+        let url_path = raw.replace('\\', "/").replace(' ', "%20");
+        let url = if url_path.starts_with('/') { format!("file://{url_path}") } else { format!("file:///{url_path}") };
+        assert!(image_path_from_paste(&url).is_some(), "{url}");
     }
 
     #[test]

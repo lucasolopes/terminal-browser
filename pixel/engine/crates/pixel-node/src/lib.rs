@@ -8,6 +8,10 @@ mod markdown;
 mod mend;
 mod ops;
 mod record;
+#[cfg(unix)]
+mod shm;
+#[cfg(not(unix))]
+#[path = "shm_unsupported.rs"]
 mod shm;
 mod surface;
 
