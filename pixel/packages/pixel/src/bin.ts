@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { announceGuest, findOwner, waitForOwners } from "./instances";
 import { apparmorSetup, linuxSandboxError } from "./sandbox";
-import { UNSUPPORTED_ENV, checkTerminal, detect } from "./terminal";
+import { UNSUPPORTED_ENV, checkTerminal, consoleSessionKey, detect } from "./terminal";
 
 function fail(message: string): never {
   process.stderr.write(`pixel: ${message}\n`);
@@ -67,8 +67,7 @@ function logFile(appDir: string): string {
 }
 
 function ownTty(): string {
-  // Windows has no tty device, so the console session stands in as the key other instances look up.
-  if (process.platform === "win32") return `windows-console-${process.env.WT_SESSION ?? process.ppid}`;
+  if (process.platform === "win32") return consoleSessionKey();
   try {
     const out = execFileSync("tty", { stdio: ["inherit", "pipe", "ignore"], encoding: "utf8" }).trim();
     if (out.startsWith("/dev/")) return out;

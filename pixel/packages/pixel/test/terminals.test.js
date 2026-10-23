@@ -373,3 +373,15 @@ test("the graphics probe settles on kitty graphics, sixel, or neither", () => {
   assert.equal(graphicsSupport("\x1b[?14;42c"), "unsupported", "4 only counts as a whole attribute");
   assert.equal(graphicsSupport("\x1b[?61;4"), null, "reply still arriving");
 });
+
+test("local sockets become named pipes on windows and stay files elsewhere", () => {
+  const { ipcPath } = require("../dist/terminal/index.js");
+  const file = path.join(os.tmpdir(), "terminal-browser", "daemon.sock");
+  if (process.platform === "win32") {
+    assert.match(ipcPath(file), /^\\\\\.\\pipe\\terminal-browser-[0-9a-f]{16}-daemon\.sock$/);
+    assert.equal(ipcPath(file), ipcPath(file), "the same file always names the same pipe");
+    assert.notEqual(ipcPath(file), ipcPath(file.replace("daemon", "other")));
+  } else {
+    assert.equal(ipcPath(file), file);
+  }
+});

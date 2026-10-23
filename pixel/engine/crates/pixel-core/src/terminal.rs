@@ -10,6 +10,8 @@ mod present;
 mod sys;
 
 pub(crate) use sys::{FrameFile, HostStream, write_shm};
+#[cfg(windows)]
+pub use sys::relay::ConsoleRelay;
 #[cfg(test)]
 pub(crate) use sys::HostListener;
 use sys::{fill_shm, open_shm};
@@ -300,6 +302,7 @@ pub struct Terminal {
     color_query: Option<ColorQuery>,
     kitty_keyboard: bool,
     sixel: Option<crate::sixel::Screen>,
+    relay_size: Option<WindowSize>,
 }
 
 #[derive(Default)]
@@ -452,6 +455,7 @@ impl Terminal {
 
     fn with_handle(mut io: TtyHandle, wrapper: Wrapper, env: SessionEnv) -> io::Result<Self> {
         let saved = io.enter_raw_mode()?;
+        let relay_size = env.var(RELAY_SIZE_ENV).as_deref().and_then(parse_relay_size);
 
         // would prefer if they weren't magic and linked to some known doc on the internet
         io.out().write_all(
@@ -465,6 +469,7 @@ impl Terminal {
             wrapper,
             crate::herdr::HerdrTarget::from_env(&env),
         );
+        terminal.relay_size = relay_size;
         terminal.kitty_keyboard = terminal.probe_kitty_keyboard()?;
         if !terminal.kitty_keyboard {
             terminal.io.out().write_all(b"\x1b[>4;2m")?;
@@ -544,6 +549,7 @@ impl Terminal {
             color_query: None,
             kitty_keyboard: false,
             sixel: None,
+            relay_size: None,
         }
     }
 
@@ -922,7 +928,12 @@ impl Terminal {
                         self.focused = focused;
                         Event::Focus(focused)
                     }
-                    RawEvent::WindowSize(ws) => Event::WindowSize(ws),
+                    RawEvent::WindowSize(ws) => {
+                        if self.relay_size.is_some() {
+                            self.relay_size = Some(ws);
+                        }
+                        Event::WindowSize(ws)
+                    }
                     RawEvent::CellSize(cell) => {
                         self.cell = Some(cell);
                         Event::CellSize(cell)
@@ -1093,6 +1104,9 @@ impl Terminal {
     pub fn size(&self) -> io::Result<WindowSize> {
         if let Some(state) = &self.hosted {
             return Ok(state.size);
+        }
+        if let Some(size) = self.relay_size {
+            return Ok(size);
         }
         self.io.window_size()
     }
@@ -1872,6 +1886,20 @@ fn parse_csi(buf: &[u8]) -> Option<(RawEvent, usize)> {
     Some((event, end))
 }
 
+/// A process relaying its own console to the engine names the console's size here, then sends
+/// every later size in band, since the engine has no console of its own to ask.
+pub const RELAY_SIZE_ENV: &str = "TERMINAL_BROWSER_RELAY_SIZE";
+
+fn parse_relay_size(value: &str) -> Option<WindowSize> {
+    let (cols, rows) = value.split_once(',')?;
+    let (cols, rows) = (cols.trim().parse::<u32>().ok()?, rows.trim().parse::<u32>().ok()?);
+    (cols > 0 && rows > 0).then_some(WindowSize { cols, rows, width_px: 0, height_px: 0 })
+}
+
+pub fn resize_report(cols: u32, rows: u32) -> Vec<u8> {
+    format!("[48;{rows};{cols};0;0t").into_bytes()
+}
+
 fn parse_resize_report(params: &[u8]) -> Option<WindowSize> {
     let mut fields = params.split(|&b| b == b';').map(|field| {
         let digits: Vec<u8> = field
@@ -2220,6 +2248,21 @@ mod tests {
 
         drop(file);
         assert!(!path.exists(), "the frame file outlived the terminal");
+    }
+
+    #[test]
+    fn a_relay_names_its_size_and_reports_changes_in_band() {
+        assert_eq!(
+            parse_relay_size("120,30"),
+            Some(WindowSize { cols: 120, rows: 30, width_px: 0, height_px: 0 })
+        );
+        assert_eq!(parse_relay_size("120"), None);
+        assert_eq!(parse_relay_size("0,30"), None);
+        assert_eq!(parse_relay_size("wide,30"), None);
+        let report = resize_report(100, 40);
+        let (event, used) = parse_event(&report).unwrap();
+        assert_eq!(used, report.len());
+        assert_eq!(event, RawEvent::WindowSize(WindowSize { cols: 100, rows: 40, width_px: 0, height_px: 0 }));
     }
 
     #[test]

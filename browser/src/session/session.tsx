@@ -771,7 +771,7 @@ class Session {
       this.shutdown();
       return true;
     }
-    if (process.platform === "linux" && event.mods.ctrl && event.key === "c") {
+    if (process.platform !== "darwin" && event.mods.ctrl && event.key === "c") {
       this.showToast("ctrl+q to quit", "alert");
       return true;
     }

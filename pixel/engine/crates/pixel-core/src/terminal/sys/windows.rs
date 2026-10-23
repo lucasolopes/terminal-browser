@@ -21,16 +21,44 @@ use windows_sys::Win32::System::Threading::{
 
 use super::super::{TtyHandle, WindowSize};
 
+#[path = "windows_relay.rs"]
+pub(crate) mod relay;
+
 pub(crate) type HostStream = uds_windows::UnixStream;
 
 #[cfg(test)]
 pub(crate) type HostListener = uds_windows::UnixListener;
 
 const SOCKET_POLL_SLICE: Duration = Duration::from_millis(10);
+const PIPE_POLL_SLICE: Duration = Duration::from_millis(2);
 
-pub(in crate::terminal) struct RawMode {
+#[derive(Clone, Copy)]
+pub(crate) struct ConsoleModes {
     input: CONSOLE_MODE,
     output: CONSOLE_MODE,
+}
+
+// A relayed terminal arrives as a pipe, which has no console modes to change.
+pub(in crate::terminal) struct RawMode(Option<ConsoleModes>);
+
+pub(crate) fn enter_console_raw_mode() -> io::Result<ConsoleModes> {
+    let step = |name: &str, error: io::Error| io::Error::new(error.kind(), format!("{name}: {error}"));
+    let input = std_handle(STD_INPUT_HANDLE);
+    let output = std_handle(STD_OUTPUT_HANDLE);
+    let saved = ConsoleModes {
+        input: console_mode(input).map_err(|e| step("GetConsoleMode(input)", e))?,
+        output: console_mode(output).map_err(|e| step("GetConsoleMode(output)", e))?,
+    };
+    set_console_mode(input, ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS)
+        .map_err(|e| step("SetConsoleMode(input)", e))?;
+    set_console_mode(output, saved.output | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN)
+        .map_err(|e| step("SetConsoleMode(output)", e))?;
+    Ok(saved)
+}
+
+pub(crate) fn leave_console_raw_mode(saved: ConsoleModes) {
+    let _ = set_console_mode(std_handle(STD_INPUT_HANDLE), saved.input);
+    let _ = set_console_mode(std_handle(STD_OUTPUT_HANDLE), saved.output);
 }
 
 fn std_handle(which: u32) -> HANDLE {
@@ -98,30 +126,16 @@ impl TtyHandle {
     }
 
     pub(in crate::terminal) fn enter_raw_mode(&self) -> io::Result<RawMode> {
-        let step =
-            |name: &str, error: io::Error| io::Error::new(error.kind(), format!("{name}: {error}"));
-        let input = std_handle(STD_INPUT_HANDLE);
-        let output = std_handle(STD_OUTPUT_HANDLE);
-        let saved = RawMode {
-            input: console_mode(input).map_err(|e| step("GetConsoleMode(input)", e))?,
-            output: console_mode(output).map_err(|e| step("GetConsoleMode(output)", e))?,
-        };
-        set_console_mode(
-            input,
-            ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS,
-        )
-        .map_err(|e| step("SetConsoleMode(input)", e))?;
-        set_console_mode(
-            output,
-            saved.output | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN,
-        )
-        .map_err(|e| step("SetConsoleMode(output)", e))?;
-        Ok(saved)
+        match self {
+            TtyHandle::File(_) => Ok(RawMode(None)),
+            _ => Ok(RawMode(Some(enter_console_raw_mode()?))),
+        }
     }
 
     pub(in crate::terminal) fn leave_raw_mode(&self, saved: &RawMode) {
-        let _ = set_console_mode(std_handle(STD_INPUT_HANDLE), saved.input);
-        let _ = set_console_mode(std_handle(STD_OUTPUT_HANDLE), saved.output);
+        if let RawMode(Some(modes)) = saved {
+            leave_console_raw_mode(*modes);
+        }
     }
 
     pub(in crate::terminal) fn window_size(&self) -> io::Result<WindowSize> {
@@ -147,9 +161,10 @@ impl TtyHandle {
     ) -> io::Result<bool> {
         match self {
             TtyHandle::Stdio { .. } => wait_console(std_handle(STD_INPUT_HANDLE), wake, wait),
-            TtyHandle::File(_) => Ok(true),
+            TtyHandle::File(file) => wait_polling(|slice| pipe_readable(file.as_raw_handle() as HANDLE, slice), wake, wait),
             TtyHandle::Hosted { stream, .. } | TtyHandle::Embedded { stream, .. } => {
-                wait_socket(stream.as_raw_socket() as SOCKET, wake, wait)
+                let socket = stream.as_raw_socket() as SOCKET;
+                wait_polling(|slice| socket_readable(socket, slice.as_millis() as i32), wake, wait)
             }
         }
     }
@@ -317,16 +332,32 @@ fn socket_readable(socket: SOCKET, millis: i32) -> io::Result<bool> {
     Ok(n > 0)
 }
 
-fn wait_socket(socket: SOCKET, wake: Option<&WakeRx>, wait: Option<Duration>) -> io::Result<bool> {
+// A broken pipe counts as readable, so the next read reports the end of the stream.
+fn pipe_readable(pipe: HANDLE, slice: Duration) -> io::Result<bool> {
+    use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+    let mut available = 0u32;
+    if unsafe { PeekNamedPipe(pipe, std::ptr::null_mut(), 0, std::ptr::null_mut(), &mut available, std::ptr::null_mut()) } == 0 {
+        return Ok(true);
+    }
+    if available > 0 {
+        return Ok(true);
+    }
+    std::thread::sleep(slice.min(PIPE_POLL_SLICE));
+    Ok(false)
+}
+
+fn wait_polling(
+    mut ready: impl FnMut(Duration) -> io::Result<bool>,
+    wake: Option<&WakeRx>,
+    wait: Option<Duration>,
+) -> io::Result<bool> {
     let deadline = wait.map(|w| Instant::now() + w);
     loop {
         let slice = match deadline {
-            Some(at) => at
-                .saturating_duration_since(Instant::now())
-                .min(SOCKET_POLL_SLICE),
+            Some(at) => at.saturating_duration_since(Instant::now()).min(SOCKET_POLL_SLICE),
             None => SOCKET_POLL_SLICE,
         };
-        if socket_readable(socket, slice.as_millis() as i32)? {
+        if ready(slice)? {
             return Ok(true);
         }
         if wake.is_some_and(WakeRx::take) || deadline.is_some_and(|at| Instant::now() >= at) {
@@ -373,6 +404,10 @@ pub(in crate::terminal) struct WakeRx {
 }
 
 impl WakeRx {
+    fn event_handle(&self) -> HANDLE {
+        self.event.0
+    }
+
     fn take(&self) -> bool {
         unsafe { WaitForMultipleObjects(1, &self.event.0, 0, 0) == WAIT_OBJECT_0 }
     }
