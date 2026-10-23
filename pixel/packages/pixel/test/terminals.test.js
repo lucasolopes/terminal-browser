@@ -343,3 +343,13 @@ test("ghostty asks the owning instance for a split's neighbor by window and tab"
   assert.equal(commands.at(-1), `osascript -l JavaScript - ${process.ppid} neighbor w1 t1 AAAA right`);
 });
 
+
+test("the graphics probe settles on kitty graphics, sixel, or neither", () => {
+  const { graphicsSupport } = require("../dist/terminal/graphics.js");
+  assert.equal(graphicsSupport("\x1b_Gi=4207;OK\x1b\\\x1b[?62;4c"), "supported");
+  assert.equal(graphicsSupport("\x1b_Gi=4207;ENOTSUPPORTED\x1b\\\x1b[?62c"), "unsupported");
+  assert.equal(graphicsSupport("\x1b[?61;4;6;7;14;21;22;23;24;28;32;42;52c"), "supported", "windows terminal draws sixel");
+  assert.equal(graphicsSupport("\x1b[?62;22c"), "unsupported", "neither kitty graphics nor sixel");
+  assert.equal(graphicsSupport("\x1b[?14;42c"), "unsupported", "4 only counts as a whole attribute");
+  assert.equal(graphicsSupport("\x1b[?61;4"), null, "reply still arriving");
+});

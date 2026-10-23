@@ -177,7 +177,8 @@ export function createRoot(options: RootOptions = {}): Root {
 
   const engineRoot = createEngineRoot({
     ...options,
-    tty: owner || embed ? undefined : tty,
+    // On Windows the tty is only the console session's key; the engine draws in its own console.
+    tty: owner || embed || process.platform === "win32" ? undefined : tty,
     host: owner
       ? {
           socket: owner.socket,

@@ -52,6 +52,40 @@ fn set_console_mode(handle: HANDLE, mode: CONSOLE_MODE) -> io::Result<()> {
     Ok(())
 }
 
+// Electron is a GUI program on Windows, so it starts detached from the console of the
+// shell that launched it and has to join that console before it can draw in it.
+pub(in crate::terminal) fn attach_console() -> io::Result<()> {
+    use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
+    use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole, SetStdHandle};
+
+    if console_mode(std_handle(STD_INPUT_HANDLE)).is_ok() && console_mode(std_handle(STD_OUTPUT_HANDLE)).is_ok() {
+        return Ok(());
+    }
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+    for (name, which) in [("CONIN$", STD_INPUT_HANDLE), ("CONOUT$", STD_OUTPUT_HANDLE)] {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let handle = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                0,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(io::Error::other(format!("open {name}: {}", io::Error::last_os_error())));
+        }
+        if unsafe { SetStdHandle(which, handle) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 impl TtyHandle {
     pub(in crate::terminal) fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
         match self {

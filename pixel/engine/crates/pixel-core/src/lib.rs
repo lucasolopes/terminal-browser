@@ -6,6 +6,7 @@ mod herdr;
 mod hosted;
 mod image_cache;
 mod kitty;
+mod sixel;
 pub mod logging;
 mod menu;
 mod native;

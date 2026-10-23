@@ -299,6 +299,7 @@ pub struct Terminal {
     color_scheme_updates: bool,
     color_query: Option<ColorQuery>,
     kitty_keyboard: bool,
+    sixel: Option<crate::sixel::Screen>,
 }
 
 #[derive(Default)]
@@ -311,6 +312,11 @@ struct ClipRead {
 const CLIP_READ_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 const LONE_ESCAPE_WAIT: Duration = Duration::from_millis(50);
+
+const SIXEL_PROBE_TIMEOUT_MS: u64 = 500;
+// Sixel display mode pins every image to the top left corner and stops images from scrolling the screen.
+const SIXEL_DISPLAY_MODE_ON: &[u8] = b"\x1b[?80h";
+const SIXEL_DISPLAY_MODE_OFF: &[u8] = b"\x1b[?80l";
 
 #[derive(Clone)]
 pub struct Waker {
@@ -347,6 +353,7 @@ impl SessionEnv {
 
 impl Terminal {
     pub fn new(wrapper: Wrapper, env: SessionEnv) -> io::Result<Self> {
+        sys::attach_console()?;
         Self::with_handle(
             TtyHandle::Stdio {
                 stdin: io::stdin(),
@@ -473,10 +480,17 @@ impl Terminal {
         if terminal.herdr.is_none() && terminal.herdr_target.is_some() {
             terminal.herdr_retry = Some((Instant::now() + HERDR_RETRY_MIN, HERDR_RETRY_MIN));
         }
-        // these are a bit messy/sus
-        terminal.transport = terminal.probe_transport(&env)?;
-        terminal.identity = terminal.probe_identity(&env)?;
-        terminal.present = terminal.choose_present(&env)?;
+        if terminal.probe_sixel(&env)? {
+            crate::logging::info("terminal", "the terminal draws sixel images rather than kitty graphics");
+            terminal.io.out().write_all(SIXEL_DISPLAY_MODE_ON)?;
+            terminal.io.out().flush()?;
+            terminal.sixel = Some(crate::sixel::Screen::default());
+        } else {
+            // these are a bit messy/sus
+            terminal.transport = terminal.probe_transport(&env)?;
+            terminal.identity = terminal.probe_identity(&env)?;
+            terminal.present = terminal.choose_present(&env)?;
+        }
         terminal.color_scheme_updates = terminal.probe_color_scheme()?;
         if terminal.color_scheme_updates {
             terminal.io.out().write_all(b"\x1b[?2031h")?;
@@ -529,6 +543,7 @@ impl Terminal {
             color_scheme_updates: false,
             color_query: None,
             kitty_keyboard: false,
+            sixel: None,
         }
     }
 
@@ -730,6 +745,11 @@ impl Terminal {
                     self.placeholders = None;
                 }
             }
+        }
+        if let Some(screen) = self.sixel.as_mut() {
+            let damage: Vec<crate::surfaces::Rect> = frame.changed.iter().chain(frame.repainted).copied().collect();
+            let image = crate::profiler::span("sixel.encode", || screen.update(canvas, frame.premultiplied, &damage));
+            return self.write_synchronized(&image);
         }
         let mut out = Vec::new();
         let drawn = match self.present {
@@ -1166,6 +1186,20 @@ impl Terminal {
         Ok(colors)
     }
 
+    fn probe_sixel(&mut self, env: &SessionEnv) -> io::Result<bool> {
+        match env.var("TERMINAL_BROWSER_GRAPHICS").as_deref().map(str::trim) {
+            Some("sixel") => return Ok(true),
+            Some("kitty") => return Ok(false),
+            _ => {}
+        }
+        if self.wrapper.relayed() {
+            return Ok(false);
+        }
+        self.io.out().write_all(&crate::sixel::graphics_probe())?;
+        self.io.out().flush()?;
+        Ok(self.read_report(SIXEL_PROBE_TIMEOUT_MS, crate::sixel::draws_sixels)?.unwrap_or(false))
+    }
+
     fn probe_kitty_keyboard(&mut self) -> io::Result<bool> {
         self.io.out().write_all(b"\x1b[?u")?;
         self.io.out().flush()?;
@@ -1464,6 +1498,9 @@ impl Drop for Terminal {
         }
         if self.color_scheme_updates {
             let _ = self.io.out().write_all(b"\x1b[?2031l");
+        }
+        if self.sixel.is_some() {
+            let _ = self.io.out().write_all(SIXEL_DISPLAY_MODE_OFF);
         }
         self.restore_pointer_shape();
         let _ = self.io.out().write_all(

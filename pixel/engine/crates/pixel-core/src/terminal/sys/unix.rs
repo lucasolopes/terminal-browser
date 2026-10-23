@@ -348,3 +348,7 @@ pub(in crate::terminal) fn resize_slot_is_free(slot: usize) -> bool {
 
 #[cfg(test)]
 pub(crate) type HostListener = std::os::unix::net::UnixListener;
+
+pub(in crate::terminal) fn attach_console() -> io::Result<()> {
+    Ok(())
+}
