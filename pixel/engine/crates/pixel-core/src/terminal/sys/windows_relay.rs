@@ -19,7 +19,7 @@ use windows_sys::Win32::System::Pipes::{
 use windows_sys::Win32::System::Threading::{CreateEventW, INFINITE, ResetEvent, WaitForMultipleObjects};
 
 use super::{
-    console_has_text, enter_console_raw_mode, leave_console_raw_mode, read_console, std_handle, wake_pair,
+    attach_console, console_has_text, enter_console_raw_mode, leave_console_raw_mode, read_console, std_handle, wake_pair,
     watch_resize, window_size_of,
 };
 
@@ -175,6 +175,7 @@ impl ConsoleRelay {
     /// Waits for the engine to connect, then relays until it closes the pipe.
     pub fn run(self) -> io::Result<()> {
         self.connect()?;
+        attach_console()?;
         let modes = enter_console_raw_mode()?;
         let code_page = unsafe { GetConsoleOutputCP() };
         unsafe { SetConsoleOutputCP(UTF8_CODE_PAGE) };

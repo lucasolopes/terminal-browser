@@ -134,7 +134,7 @@ function browserLaunchCommand(argv: string[]): { electron: string; args: string[
 
 function clientLaunchCommand(argv: string[]): string[] {
   const runner = DIST_ROOT
-    ? [path.join(DIST_ROOT, "bin", "terminal-browser")]
+    ? [path.join(DIST_ROOT, "bin", process.platform === "win32" ? "terminal-browser.exe" : "terminal-browser")]
     : [process.execPath, path.resolve(__dirname, "main.js")];
   return [...runner, "open", ...argv];
 }
@@ -153,6 +153,7 @@ function ownTtyPath(): string | null {
 }
 
 function interactiveTty(): string | null {
+  if (process.platform === "win32") return process.stdout.isTTY ? ownTtyPath() : null;
   if (!process.stdin.isTTY || !process.stdout.isTTY) return null;
   return ownTtyPath();
 }
@@ -335,7 +336,8 @@ async function kill(pid: number, why: string): Promise<number> {
 }
 
 async function relayHere(argv: string[]): Promise<never> {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("not running in a console");
+  // Electron running as node sees only stdout as the console; the native relay reads the keys itself.
+  if (!process.stdout.isTTY) throw new Error("not running in a console");
   const pipe = `\\\\.\\pipe\\terminal-browser-relay-${process.pid}-${randomBytes(6).toString("hex")}`;
   const relayed = relayConsole(pipe);
   const size = `${process.stdout.columns},${process.stdout.rows}`;
