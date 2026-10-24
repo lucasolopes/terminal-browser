@@ -2,7 +2,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import type { Browser } from './browser'
 import { MAX_IMAGE_CELLS } from './surface.tsx'
-import { normalizeUrl } from './urls.ts'
+import { normalizeUrl, paneUrl } from './urls.ts'
 import {
   isBridgeState,
   isInputMessage,
@@ -86,7 +86,8 @@ async function openBeside(
   command: string[],
   raw: string | null,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  const url = raw ? normalizeUrl(raw) : null
+  const url = raw ? paneUrl(raw) : null
+  if (raw && !url) return { ok: false, error: `terminal-browser will not open ${JSON.stringify(raw)} in a pane` }
   let result: { stdout: string; stderr: string; exitCode: number }
   try {
     result = await $.process.run([...command, ...(url ? [url] : []), '--split', 'right'], { timeoutMs: 60_000 })
