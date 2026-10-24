@@ -24,6 +24,7 @@ const START_URL = 'terminal-browser://start'
 const INSTALL_URL = 'https://terminal-browser.sh'
 const REQUIRED_CAPABILITIES = ['embedding', 'image-frames']
 const SPLIT_CAPABILITY = 'split-pane'
+const OPEN_URL_ENV = 'TERMINAL_BROWSER_OPEN_URL'
 const WATCH_RETRY_MS = 250
 const DENIED_REDRAW_MS = 500
 const DENIALS_BEFORE_LOGGING = 3
@@ -90,7 +91,11 @@ async function openBeside(
   if (raw && !url) return { ok: false, error: `terminal-browser will not open ${JSON.stringify(raw)} in a pane` }
   let result: { stdout: string; stderr: string; exitCode: number }
   try {
-    result = await $.process.run([...command, ...(url ? [url] : []), '--split', 'right'], { timeoutMs: 60_000 })
+    // The address travels in the environment, never on a command line a shell could parse.
+    result = await $.process.run([...command, 'open', '--split', 'right'], {
+      timeoutMs: 60_000,
+      ...(url ? { env: { [OPEN_URL_ENV]: url } } : {}),
+    })
   } catch (err) {
     return { ok: false, error: `terminal-browser could not start: ${err}` }
   }

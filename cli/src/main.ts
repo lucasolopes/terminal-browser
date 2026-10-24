@@ -34,6 +34,7 @@ import { browsers, describe, recordKey } from "./instances";
 import type { Browser } from "./instances";
 import { findHosts, openInHost } from "./interop";
 import { lsCommand } from "./ls";
+import { takeHandedUrl } from "./handed-url";
 import { instances } from "./registry";
 import { apparmorSetup, deniedRefusal, linuxSandboxError, sandboxRefusal } from "./sandbox";
 import { connectSsh, validateSshTarget } from "@zenbu-labs/pixel/ssh";
@@ -616,6 +617,7 @@ async function tryAdopt(args: string[], direction: Direction | null): Promise<bo
 }
 
 async function openCommand(args: string[]) {
+  takeHandedUrl(args);
   requirePaneAccess();
   const owned = process.env.PIXEL_TTY ?? ownTtyPath();
   if (process.env.PIXEL_EMBED || (owned && findOwner(owned))) {
