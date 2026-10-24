@@ -1,4 +1,13 @@
+import path from "node:path";
+
 import type { Detect } from "../terminal";
+
+// Windows looks in the current directory before PATH, so a bare "wt" would run a wt.exe planted
+// in whatever project the user is in; Windows Terminal's own alias lives here instead.
+function wtExecutable(env: NodeJS.ProcessEnv): string {
+  if (!env.LOCALAPPDATA) throw new Error("cannot find wt.exe without LOCALAPPDATA");
+  return path.win32.join(env.LOCALAPPDATA, "Microsoft", "WindowsApps", "wt.exe");
+}
 
 // wt reads `;` as the start of its next command, so one inside an argument has to be escaped.
 function wtArgument(arg: string): string {
@@ -19,7 +28,7 @@ export const windowsTerminal: Detect = (env, run) => {
     async split({ direction, command, size }) {
       const orientation = direction === "right" || direction === "left" ? "--vertical" : "--horizontal";
       const sized = size ? ["--size", String(size)] : [];
-      await run("wt", ["-w", "0", "split-pane", orientation, ...sized, ...command.map(wtArgument)]);
+      await run(wtExecutable(env), ["-w", "0", "split-pane", orientation, ...sized, ...command.map(wtArgument)]);
     },
   };
 };

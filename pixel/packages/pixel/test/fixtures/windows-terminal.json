@@ -1,10 +1,11 @@
 {
   "env": {
     "WT_SESSION": "744022a0-e234-4198-8c9e-fea447ac6742",
-    "WT_PROFILE_ID": "{574e775e-4f2a-5b96-ac1e-a2962a402336}"
+    "WT_PROFILE_ID": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+    "LOCALAPPDATA": "C:\\Users\\me\\AppData\\Local"
   },
   "exec": {
-    "wt -w 0 split-pane --vertical terminal-browser open": ""
+    "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe -w 0 split-pane --vertical terminal-browser open": ""
   },
   "expect": {
     "name": "windows-terminal",
@@ -27,7 +28,7 @@
         "tty": null
       },
       "commands": [
-        "wt -w 0 split-pane --vertical terminal-browser open"
+        "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe -w 0 split-pane --vertical terminal-browser open"
       ]
     }
   }

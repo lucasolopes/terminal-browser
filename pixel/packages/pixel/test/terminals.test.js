@@ -345,10 +345,11 @@ test("ghostty asks the owning instance for a split's neighbor by window and tab"
 
 
 test("windows terminal sizes splits and keeps semicolons inside the command", async () => {
+  const wt = "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe";
   const { run, commands } = recorder({
-    "wt -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y": "",
+    [`${wt} -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y`]: "",
   });
-  const terminal = detect({ WT_SESSION: "s1" }, run);
+  const terminal = detect({ WT_SESSION: "s1", LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" }, run);
   await terminal.split({
     from: { id: "s1", tab: "s1" },
     direction: "down",
@@ -356,7 +357,15 @@ test("windows terminal sizes splits and keeps semicolons inside the command", as
     size: 0.4,
     tty: null,
   });
-  assert.deepEqual(commands, ["wt -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y"]);
+  assert.deepEqual(commands, [`${wt} -w 0 split-pane --horizontal --size 0.4 terminal-browser open https://a.test/x\\;y`]);
+});
+
+test("windows terminal never runs a wt.exe found in the current directory", async () => {
+  const terminal = detect({ WT_SESSION: "s1" }, async () => "");
+  await assert.rejects(
+    terminal.split({ from: { id: "s1", tab: "s1" }, direction: "right", command: ["x"], size: null, tty: null }),
+    /LOCALAPPDATA/,
+  );
 });
 
 test("a windows terminal session inherited by another terminal is not windows terminal", () => {
